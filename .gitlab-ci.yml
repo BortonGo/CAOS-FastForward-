@@ -6,7 +6,7 @@ variables:
 grade:
   image: $REGISTRY/testenv-image:latest
   rules:
-    - if: $CI_PROJECT_NAME =~ /^public-20\d\d/
+    - if: $CI_PROJECT_NAME =~ /^public\d\d/
       when: never
     - if: $CI_MERGE_REQUEST_SOURCE_BRANCH_NAME =~ /contributing/ || $CI_COMMIT_BRANCH =~ /contributing/
       when: never
