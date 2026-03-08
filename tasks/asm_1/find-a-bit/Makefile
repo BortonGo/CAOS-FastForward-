@@ -9,3 +9,6 @@ clean :
 
 test: solution
 	python3 $(NEJUDGE_DIR)/test.py --user ejexec
+	
+docker-test:
+	docker run --rm -it -v "$(realpath ../../../)":/app -w /app/tasks/asm_1/find-a-bit asm-ubuntu make test

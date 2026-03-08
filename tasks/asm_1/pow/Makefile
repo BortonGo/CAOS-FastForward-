@@ -7,3 +7,6 @@ solution : solution.S
 test: solution
 	python3 $(NEJUDGE_DIR)/test.py --user ejexec
 	-rm solution
+	
+docker-test:
+	docker run --rm -it -v "$(realpath ../../../)":/app -w /app/tasks/asm_1/pow asm-ubuntu make test
