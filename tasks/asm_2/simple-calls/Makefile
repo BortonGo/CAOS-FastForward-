@@ -1,9 +1,3 @@
-CFLAGS = -g -O2 -Wall -Werror -std=c++23 -I $(NEJUDGE_DIR)/include
-NEJUDGE_DIR ?= ../../../nejudge
+SOLUTION_SRC = main.c solution.S simpleio_x86_64.S
 
-solution : main.c solution.S simpleio_x86_64.S
-	$(CC) solution.S simpleio_x86_64.S main.c  -o $@
-	
-test: solution
-	@set -a; [ -f config.env ] && . ./config.env; set +a; python3 $(NEJUDGE_DIR)/test.py --user ejexec
-	-rm solution
+include ../../Makefile.config
