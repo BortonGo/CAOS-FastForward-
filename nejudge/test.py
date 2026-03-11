@@ -193,7 +193,7 @@ def run_clang_format(source_file: str, format_file: str, ci: bool):
 
 def check_style(source_file_wildcard: str, ci: bool):
     for source_file in glob.glob(source_file_wildcard):
-        if source_file.endswith('.bak'):
+        if source_file.endswith('.bak') or source_file.endswith('.o') or source_file.endswith('.template'):
             continue
         if not os.path.isfile(source_file):
             print("WARNING:", source_file, "is not valid source file")
@@ -331,7 +331,7 @@ def fix_command_path(cmd: list[str], run_path: Path, extra_params: list[str]) ->
     return full_cmd
 
 
-def res_checker(res: bytes, ans: Path, checker: str):
+def res_checker(test: str, res: bytes, ans: Path, checker: str):
     with open(ans, 'rb') as expected:
         to_cmp = expected.read()
     if checker == 'cmp':
@@ -353,14 +353,19 @@ def res_checker(res: bytes, ans: Path, checker: str):
     elif checker == 'cmp-double':
         def parse_double(data: bytes) -> float:
             res = data.decode().strip()
-            if res.startswith('0x'):
+            if res.startswith('0x') or res.startswith('-0x'):
                 return float.fromhex(res)
             return float(res)
         eps = float(os.environ.get('EPS', 0))
-        res_f = parse_double(res)
-        ans_f = parse_double(to_cmp)
-        if abs(res_f - ans_f) > eps:
-            raise RuntimeError(f'{res} != {ans_f} for EPS={eps}')
+        res_l = res.strip().split(b'\n')
+        ans_l = to_cmp.strip().split(b'\n')
+        if len(res_l) != len(ans_l):
+            raise RuntimeError(f'Expected {len(res_l)} doubles, found {len(ans_l)}')
+        for res_s, ans_s in zip(res_l, ans_l):
+            res_f = parse_double(res_s)
+            ans_f = parse_double(ans_s)
+            if abs(res_f - ans_f) > eps:
+                raise RuntimeError(f'{res_f} != {ans_f} for EPS={eps}')
     elif checker == 'ignore-spaces':
         res_s = res.decode().split()
         cmp_s = to_cmp.decode().split()
@@ -500,7 +505,7 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
                     with open(output_file, 'rb') as f:
                         res = f.read()
                 try:
-                    res_checker(res, correct_file, checker)
+                    res_checker(str(test), res, correct_file, checker)
                 except:
                     if str(test) in may_fail_local:
                         print(f"Test {test} skipped")
