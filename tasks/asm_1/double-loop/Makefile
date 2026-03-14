@@ -1,1 +1,1 @@
-include ../../Makefile.config
+include ../../../nejudge/Makefile.config

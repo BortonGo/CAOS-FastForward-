@@ -2,6 +2,8 @@ import xml.etree.ElementTree as ET
 
 
 def xml2md(elem: ET.Element, idx=0):
+    if elem.tag == 'h3':
+        return '###' + ''.join(elem.itertext()) + (elem.tail if elem.tail else '')
     if elem.tag == 'p':
         return ((elem.text if elem.text else '') +
                 ''.join(xml2md(inner) for inner in elem) +
@@ -22,6 +24,8 @@ def xml2md(elem: ET.Element, idx=0):
         return '```\n' + ''.join(elem.itertext()) + '\n```' + (elem.tail if elem.tail else '')
     if elem.tag == 'b':
         return '**' + ''.join(elem.itertext()) + '**' + (elem.tail if elem.tail else '')
+    if elem.tag == 'em':
+        return '*' + ''.join(elem.itertext()) + '*' + (elem.tail if elem.tail else '')
     if elem.tag == 'tt' or elem.tag == 'code':
         return '`' + ''.join(elem.itertext()) + '`' + (elem.tail if elem.tail else '')
     if elem.tag == 'a':
@@ -44,6 +48,6 @@ with open('README.md', 'w') as f:
         for example in list(root.find('examples').findall('example')):
             f.write('### Example\n\n')
             f.write('Input:\n')
-            f.write(f"```\n{''.join(example.find('input').itertext())}\n```\n\n")
+            f.write(f'```\n{''.join(example.find('input').itertext())}\n```\n\n')
             f.write('Output:\n')
-            f.write(f"```\n{''.join(example.find('output').itertext())}\n```\n\n")
+            f.write(f'```\n{''.join(example.find('output').itertext())}\n```\n\n')

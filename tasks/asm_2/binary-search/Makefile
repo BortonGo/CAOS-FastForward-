@@ -1,6 +1,6 @@
 SOLUTION_SRC = solution.o main.o wrap_x86_64.o
 
-include ../../Makefile.config
+include ../../../nejudge/Makefile.config
 
 solution.o: solution.S
 main.o: main.c

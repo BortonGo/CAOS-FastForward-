@@ -23,7 +23,7 @@
 
 `python3 -m pip install pyyml` (требуется только для Python 3.12 и ниже, на Ubuntu также требуется в конец флаг `--break-system-packages`)
 
-Если хотите тестировать в docker ровно как на сервере - из корня `docker build -t caos .`
+Если хотите тестировать в docker ровно как на сервере - из любой задачи `make docker-build`
 
 ### MacOS
 

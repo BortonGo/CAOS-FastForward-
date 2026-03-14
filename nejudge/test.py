@@ -6,6 +6,7 @@ import subprocess
 import typing as tp
 import os
 import re
+import stat
 import shlex
 import glob
 import time
@@ -163,9 +164,7 @@ def check_clang_format_version(source_file: str, format_file: str) -> tp.List[st
     return ['python3', f'{nejudge_path}/tools/run-clang-format.py', '--style', f'file:{format_file}', source_file]
 
 
-def run_clang_format(source_file: str, format_file: str, ci: bool):
-    if ci:
-        return
+def run_clang_format(source_file: str, format_file: str, raise_on_fail: bool = False):
     args = check_clang_format_version(source_file, format_file)
     proc = subprocess.run(args, capture_output=True)
     if proc.returncode == 0:
@@ -179,29 +178,38 @@ def run_clang_format(source_file: str, format_file: str, ci: bool):
         print(proc.stdout.decode())
     except UnicodeError:
         print(proc.stdout)
-    if ci:
+    if raise_on_fail:
         raise RuntimeError("Clang-format not passed")
     fix = input('Clang-format is not passed. Fix code? (Y/n)')
     if fix and fix.lower() not in ('y', 'yes'):
         raise RuntimeError("Clang-format not passed")
     args.append('-i')
+
+    st = os.stat(source_file, follow_symlinks=False)
+    uid = st.st_uid
+    gid = st.st_gid
+    mode = stat.S_IMODE(st.st_mode)
+
     proc = subprocess.run(args, capture_output=True)
     if proc.returncode == 0:
+        os.chown(source_file, uid, gid, follow_symlinks=False)
+        os.chmod(source_file, mode, follow_symlinks=False)
         return
     raise RuntimeError(f"Unexpected failure while fixing code {proc.returncode}")
 
 
-def check_style(source_file_wildcard: str, ci: bool):
+def check_style(source_file_wildcard: str, skip_clang_format: bool):
     for source_file in glob.glob(source_file_wildcard):
         if source_file.endswith('.bak') or source_file.endswith('.o') or source_file.endswith('.template'):
             continue
         if not os.path.isfile(source_file):
             print("WARNING:", source_file, "is not valid source file")
             continue
-        if source_file.endswith('.c') or source_file.endswith('.cpp') or source_file.endswith('.hpp'):
-            clang_format_file = nejudge_path / '.clang-format'
-            if clang_format_file.is_file():
-                run_clang_format(source_file, str(clang_format_file), ci)
+        if not skip_clang_format:
+            if source_file.endswith('.c') or source_file.endswith('.cpp') or source_file.endswith('.hpp'):
+                clang_format_file = nejudge_path / '.clang-format'
+                if clang_format_file.is_file():
+                    run_clang_format(source_file, str(clang_format_file))
 
         regex_checks_passed = True
         regex_filter = os.environ.get('EJ_BAN_BY_REGEX', '')
@@ -315,8 +323,10 @@ def relative_path(run_folder: Path, path: Path) -> str:
     return '../' * parent_cnt + str(path.relative_to(run_folder))
 
 
-def fix_command_path(cmd: list[str], run_path: Path, extra_params: list[str]) -> list[str]:
+def fix_command_path(cmd: list[str], run_path: Path, extra_params: list[str], run_valgrind: bool) -> list[str]:
     full_cmd = []
+    if run_valgrind:
+        full_cmd.append('valgrind')
     any_params = False
     for param in cmd:
         if param.startswith('./'):
@@ -381,7 +391,8 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
                  output_file: tp.Optional[str], env_add: tp.Optional[tp.Dict[str, str]],
                  interactor: tp.Optional[str], initializer: tp.Optional[str], user: tp.Optional[str],
                  meta: tp.Dict[str, tp.Any], is_pipeline: bool, dirent: Path, static_copy: bool, input_filename: str,
-                 checker: str, may_fail_local: list[str], skip_tests: bool, run_initializer_till_end: bool) -> bytes:
+                 checker: str, may_fail_local: list[str], skip_tests: bool, run_initializer_till_end: bool,
+                 run_valgrind: bool) -> bytes:
     test = input_file
     input_file = input_file.absolute()
     correct_file = correct_file.absolute()
@@ -394,7 +405,9 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
     cmd = cmd.replace(input_filename, relative_path(run_path, input_file))
 
     cmd = cmd.replace('test_name', 'tests/' + input_file.name.removesuffix('.dat'))
-    full_cmd_origin = fix_command_path(shlex.split(cmd), run_path, shlex.split(params))
+    if meta.get('disable_valgrind', False):
+        run_valgrind = False
+    full_cmd_origin = fix_command_path(shlex.split(cmd), run_path, shlex.split(params), run_valgrind)
     if user:
         full_cmd = ['sudo', '-E', '-u', user] + full_cmd_origin
     else:
@@ -418,13 +431,23 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
         'start_new_session': True,  # Isolate process
         'env': env,
     }
-    if 'max_process_count' in meta and is_pipeline:
-        m = int(meta.get('max_process_count'))
-        def preexec_fn():
-            print(resource.getrlimit(resource.RLIMIT_NPROC), file=sys.stderr)
-            resource.setrlimit(resource.RLIMIT_NPROC, (m, m))
-            print(resource.getrlimit(resource.RLIMIT_NPROC), file=sys.stderr)
-        popen_args['preexec_fn'] = preexec_fn
+    if is_pipeline:
+        limit_names = {
+            'max_process_count': resource.RLIMIT_NPROC,
+            'max_open_file_count': resource.RLIMIT_NOFILE,
+        }
+        limits : dict[int, int] = {
+            rlimit: int(meta[name])
+            for name, rlimit in limit_names.items()
+            if meta.get(name, None) is not None
+        }
+        if limits:
+            def preexec_fn():
+                for rlimit, limit in limits.items():
+                    old = resource.getrlimit(rlimit)
+                    resource.setrlimit(rlimit, (limit, limit))
+                    print(f'Changed rlimit {rlimit} from {old} to {resource.getrlimit(rlimit)}', file=sys.stderr)
+            popen_args['preexec_fn'] = preexec_fn
     if meta.get('check_stderr', False):
         print('Use stderr instead of stdout')
         popen_args['stderr'] = popen_args.pop('stdout')
@@ -537,6 +560,8 @@ def parse_inf_file(f):
         'time_limit': float(os.environ.get('EJUDGE_REAL_TIME_LIMIT_MS', 1.)),
     }  # type: dict[str, tp.Any]
 
+    flags = {'enable_subst', 'check_stderr', 'disable_valgrind'}
+
     def parse_env(val: str, env: dict):
         if not val or val.isspace():
             return
@@ -555,8 +580,12 @@ def parse_inf_file(f):
                 raise RuntimeError("Unsupported env " + repr(val))
             env[val[:eq]] = val[eq + 1:]
 
-    def parse_param(key, val):
-        if key == 'params':
+    def parse_param(key: str, val: tp.Any):
+        if key in flags:
+            if not isinstance(val, bool):
+                raise RuntimeError(f'Unsupported env {key}="{val}"')
+            res[key] = val
+        elif key == 'params':
             if key in res:
                 raise RuntimeError("Duplicated params")
             res[key] = val
@@ -577,14 +606,16 @@ def parse_inf_file(f):
             if key in res:
                 raise RuntimeError("Duplicated params")
             res[key] = val
-        elif key == 'max_process_count':
+        elif key == 'max_process_count' or key == 'max_open_file_count':
             res[key] = val
         elif key == 'max_vm_size' or key == 'max_rss_size':
             pass  # ignore
         else:
             raise RuntimeError(f"Unknown inf param {key} = {val}")
 
-    flags = {'enable_subst', 'check_stderr'}
+    for name, val in os.environ.items():
+        if name.startswith('EJ_META_'):
+            parse_param(name.removeprefix('EJ_META_').lower(), val)
 
     for line in f.readlines():
         if not line.strip():
@@ -596,7 +627,7 @@ def parse_inf_file(f):
         elif line.endswith(' =\n'):
             continue
         elif line.strip() in flags:
-            res[line.strip()] = True
+            parse_param(line.strip(), True)
         else:
             raise RuntimeError(f"Unknown param '{line.strip()}'")
     return res
@@ -612,21 +643,24 @@ def main():
     parser.add_argument('--interactor', required=False)
     parser.add_argument('--initializer', required=False)
     parser.add_argument('--initializer-run-till-end', action='store_true')
+    parser.add_argument('--valgrind', action='store_true')
     parser.add_argument('--may-fail-local', nargs='+', default=[])
     parser.add_argument('--user', required=False)
     parser.add_argument('--input-filename', default='input.txt')
     parser.add_argument('--static-copy', action='store_true')
+    parser.add_argument('--force-check-style', action='store_true')
     args = parser.parse_args()
 
     is_pipeline = bool(os.environ.get('GITLAB_CI', None))
     retests_amount = int(os.environ.get('EJ_RETESTS_AMOUNT', 1))
+    args.force_check_style = os.environ.get('NEJUDGE_FORCE_CHECK_STYLE', None) == "1"
 
     if is_pipeline:
         args.may_fail_local = []
     else:
         args.user = None
 
-    check_style(args.source_file, is_pipeline)
+    check_style(args.source_file, not (args.force_check_style or not is_pipeline))
 
     for cnt in range(retests_amount):
         print(f"Trying tests #{cnt}")
@@ -649,7 +683,7 @@ def main():
             res = run_solution(test, ans, inf, args.run_cmd, meta.get('params', ''), args.output_file, meta.get('environ'),
                                args.interactor, args.initializer, args.user, meta, is_pipeline, dirent, args.static_copy,
                                args.input_filename, args.checker, args.may_fail_local, skip_tests=args.prepare_answers,
-                               run_initializer_till_end=args.initializer_run_till_end)
+                               run_initializer_till_end=args.initializer_run_till_end, run_valgrind=args.valgrind)
             if args.prepare_answers:
                 with open(ans, 'wb') as fout:
                     fout.write(res)
