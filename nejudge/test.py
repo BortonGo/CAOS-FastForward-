@@ -37,9 +37,6 @@ def check_ban(regex_filter, text, name='common', reason=None) -> bool:
 def check_req(regex_filter, text, name, reason=None) -> bool:
     found = regex_filter.search(text)
     if not found:
-        pre_descr = f' {name.lower()}' if not reason else ''
-        post_descr = f'\nReason: {reason}' if reason else ''
-        print(f"Did not find required sequence {pre_descr} {repr(regex_filter.pattern)} {post_descr}\n")
         return False
     return True
 
@@ -199,6 +196,8 @@ def run_clang_format(source_file: str, format_file: str, raise_on_fail: bool = F
 
 
 def check_style(source_file_wildcard: str, skip_clang_format: bool):
+    found = set()
+
     for source_file in glob.glob(source_file_wildcard):
         if source_file.endswith('.bak') or source_file.endswith('.o') or source_file.endswith('.template'):
             continue
@@ -221,7 +220,8 @@ def check_style(source_file_wildcard: str, skip_clang_format: bool):
             if key.startswith('EJ_BAN_BY_REGEX_REQ_'):
                 value, reason = split_reason(value)
                 value = value.replace(' ', r'\s+')
-                regex_checks_passed &= check(source_file, value, check_req, name=key[len('EJ_BAN_BY_REGEX_REQ_'):], reason=reason)
+                if check(source_file, value, check_req, name=key[len('EJ_BAN_BY_REGEX_REQ_'):], reason=reason):
+                    found.add(key)
             elif key.startswith('EJ_BAN_BY_REGEX_BAN_'):
                 value, reason = split_reason(value)
                 value = value.replace(' ', r'\s+')
@@ -229,6 +229,14 @@ def check_style(source_file_wildcard: str, skip_clang_format: bool):
         if not regex_checks_passed:
             raise RuntimeError(f"Regex check failed in file {source_file}")
 
+    for key, value in os.environ.items():
+        if key.startswith('EJ_BAN_BY_REGEX_REQ_'):
+            if key not in found:
+                value, reason = split_reason(value)
+                pre_descr = f' {key[len('EJ_BAN_BY_REGEX_REQ_'):].lower()}' if not reason else ''
+                post_descr = f'\nReason: {reason}' if reason else ''
+                print(f"Did not find required sequence {pre_descr} {repr(regex_filter.pattern)} {post_descr}\n")
+                raise RuntimeError(f"Regex check failed in files {source_file_wildcard}")
 
 def get_child_pid(pid: int) -> int:
     for i in range(10):
