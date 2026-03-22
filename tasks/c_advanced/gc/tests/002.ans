@@ -1,0 +1,12 @@
+Allocated object 0 of size 10
+Call GC
+Allocated object 1 of size 16
+Set ref #1 in 1 to 0 + 0
+Deleted stack ref to 0
+Call GC
+Unset ref #1 in 1
+Call GC
+finalizer called: 10
+Deleted stack ref to 1
+Call GC
+finalizer called: 16

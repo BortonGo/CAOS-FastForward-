@@ -1,0 +1,3 @@
+5 1
+5 0 0x7fffff00  // Max sbrk allocation without fill
+4 0 1  // check that the allocation not failed

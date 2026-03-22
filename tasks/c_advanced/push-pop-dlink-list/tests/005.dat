@@ -1,0 +1,16 @@
+push 1
+push 2
+next
+push 3
+next
+push 4
+prev
+prev
+next
+next
+next
+prev
+pop
+pop
+pop
+pop

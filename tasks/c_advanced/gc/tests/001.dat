@@ -1,0 +1,5 @@
+1
+1 0 10
+5       # object is alive, shouldn't be collected
+2 0     # delete ref
+5       # now the object should be collected

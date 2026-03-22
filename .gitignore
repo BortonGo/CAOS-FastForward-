@@ -3,3 +3,4 @@ solution
 run/
 *.o
 venv
+.docker-build.stamp

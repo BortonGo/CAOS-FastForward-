@@ -1,0 +1,11 @@
+2
+1 0 10
+5
+1 1 16      # create an object which can hold at least 2 pointers
+3 1 1 0 0   # set obj_1[1] to reference obj_0
+2 0         # remove direct ref to obj_0
+5
+4 1 1       # remove inirect ref. obj_0 should now be collected.
+5
+2 1
+5

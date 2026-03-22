@@ -1,0 +1,9 @@
+2
+1 0 16
+1 1 16
+3 0 0 1 0   # set circular refs
+3 1 0 0 0
+2 0
+5           # objects are reachable, check for infinite loop
+2 1
+5           # objects are unreachable, should be collected

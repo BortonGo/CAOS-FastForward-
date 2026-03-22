@@ -1,0 +1,11 @@
+3
+1 0 16
+1 1 16
+1 2 16      # use the same size for all objects to accept any order of deallocations
+3 0 0 1 1   # set ref with offset
+3 0 1 2 -1  # use past-the-end ptr
+2 1
+2 2
+5           # all objects are alive
+2 0
+5           # all objects should be collected

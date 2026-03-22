@@ -1,0 +1,3 @@
+5 0
+1 0 100  // allocate 100 bytes
+2 0      // and free them

@@ -4,7 +4,7 @@ import xml.etree.ElementTree as ET
 def xml2md(elem: ET.Element, idx=0):
     if elem.tag == 'h3':
         return '###' + ''.join(elem.itertext()) + (elem.tail if elem.tail else '')
-    if elem.tag == 'p':
+    if elem.tag == 'p' or elem.tag == 'comment':
         return ((elem.text if elem.text else '') +
                 ''.join(xml2md(inner) for inner in elem) +
                 (elem.tail if elem.tail else '') + '\n')
@@ -51,3 +51,8 @@ with open('README.md', 'w') as f:
             f.write(f'```\n{''.join(example.find('input').itertext())}\n```\n\n')
             f.write('Output:\n')
             f.write(f'```\n{''.join(example.find('output').itertext())}\n```\n\n')
+    if root.find('review_comments') is not None:
+        f.write('### Comments\n\n')
+        for comment in list(root.find('review_comments').findall('comment')):
+            f.write(xml2md(comment))
+            f.write('\n')

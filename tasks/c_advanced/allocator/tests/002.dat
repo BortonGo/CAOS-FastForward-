@@ -1,0 +1,5 @@
+5 0     // 5 allocations, non-verbose mode
+1 0 100 // alloc 100 bytes
+2 0     // and free them
+1 1 100 // allocate 100 bytes again
+3 0 1   // check that it's the same 100 bytes

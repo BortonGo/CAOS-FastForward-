@@ -235,8 +235,9 @@ def check_style(source_file_wildcard: str, skip_clang_format: bool):
                 value, reason = split_reason(value)
                 pre_descr = f' {key[len('EJ_BAN_BY_REGEX_REQ_'):].lower()}' if not reason else ''
                 post_descr = f'\nReason: {reason}' if reason else ''
-                print(f"Did not find required sequence {pre_descr} {repr(regex_filter.pattern)} {post_descr}\n")
+                print(f"Did not find required sequence {pre_descr} {repr(value)} {post_descr}\n")
                 raise RuntimeError(f"Regex check failed in files {source_file_wildcard}")
+
 
 def get_child_pid(pid: int) -> int:
     for i in range(10):
@@ -415,11 +416,7 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
     cmd = cmd.replace('test_name', 'tests/' + input_file.name.removesuffix('.dat'))
     if meta.get('disable_valgrind', False):
         run_valgrind = False
-    full_cmd_origin = fix_command_path(shlex.split(cmd), run_path, shlex.split(params), run_valgrind)
-    if user:
-        full_cmd = ['sudo', '-E', '-u', user] + full_cmd_origin
-    else:
-        full_cmd = full_cmd_origin
+    full_cmd = fix_command_path(shlex.split(cmd), run_path, shlex.split(params), run_valgrind)
     print(shlex.join(full_cmd), flush=True)
     env = os.environ
     if env_add:
@@ -444,7 +441,7 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
             'max_process_count': resource.RLIMIT_NPROC,
             'max_open_file_count': resource.RLIMIT_NOFILE,
         }
-        limits : dict[int, int] = {
+        limits: dict[int, int] = {
             rlimit: int(meta[name])
             for name, rlimit in limit_names.items()
             if meta.get(name, None) is not None
@@ -455,6 +452,14 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
                     old = resource.getrlimit(rlimit)
                     resource.setrlimit(rlimit, (limit, limit))
                     print(f'Changed rlimit {rlimit} from {old} to {resource.getrlimit(rlimit)}', file=sys.stderr)
+
+                if user:
+                    import pwd
+                    pw = pwd.getpwnam(user)
+                    os.setgroups([])
+                    os.setgid(pw.pw_gid)
+                    os.setuid(pw.pw_uid)
+
             popen_args['preexec_fn'] = preexec_fn
     if meta.get('check_stderr', False):
         print('Use stderr instead of stdout')
@@ -464,12 +469,6 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
             p = subprocess.Popen(full_cmd, **popen_args)
             try:
                 pid = p.pid
-                if user:
-                    try:
-                        pid = get_child_pid(pid)
-                    except Exception:
-                        print("Failed to start solution", p.returncode)
-                        raise
                 int_cmd = [relative_path(run_path, interactor), str(input_file),
                            'output', str(correct_file),
                            str(pid), str(inf_file) if inf_file.is_file() else '']
@@ -566,6 +565,7 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
 def parse_inf_file(f):
     res = {
         'time_limit': float(os.environ.get('EJUDGE_REAL_TIME_LIMIT_MS', 1.)),
+        'max_process_count': 50,
     }  # type: dict[str, tp.Any]
 
     flags = {'enable_subst', 'check_stderr', 'disable_valgrind'}
@@ -622,7 +622,12 @@ def parse_inf_file(f):
             raise RuntimeError(f"Unknown inf param {key} = {val}")
 
     for name, val in os.environ.items():
-        if name.startswith('EJ_META_'):
+        if name.startswith('EJ_META_ENV'):
+            key = 'environ'
+            if not key in res:
+                res[key] = {}
+            parse_env(val, res[key])
+        elif name.startswith('EJ_META_'):
             parse_param(name.removeprefix('EJ_META_').lower(), val)
 
     for line in f.readlines():

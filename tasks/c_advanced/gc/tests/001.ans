@@ -1,0 +1,5 @@
+Allocated object 0 of size 10
+Call GC
+Deleted stack ref to 0
+Call GC
+finalizer called: 10
