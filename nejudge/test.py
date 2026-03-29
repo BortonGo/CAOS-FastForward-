@@ -437,12 +437,24 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
         'env': env,
     }
     if is_pipeline:
+        def parse_num(s: str | int) -> int:
+            if isinstance(s, int):
+                return s
+            if s.endswith('K'):
+                return int(s[:-1]) * 1024
+            if s.endswith('M'):
+                return int(s[:-1]) * 1024 * 1024
+            if s.endswith('G'):
+                return int(s[:-1]) * 1024 * 1024 * 1024
+            return int(s)
         limit_names = {
             'max_process_count': resource.RLIMIT_NPROC,
             'max_open_file_count': resource.RLIMIT_NOFILE,
+            'max_vm_size': resource.RLIMIT_AS,
+            'max_rss_size': resource.RLIMIT_RSS,
         }
         limits: dict[int, int] = {
-            rlimit: int(meta[name])
+            rlimit: parse_num(meta[name])
             for name, rlimit in limit_names.items()
             if meta.get(name, None) is not None
         }
@@ -614,10 +626,8 @@ def parse_inf_file(f):
             if key in res:
                 raise RuntimeError("Duplicated params")
             res[key] = val
-        elif key == 'max_process_count' or key == 'max_open_file_count':
+        elif key == 'max_process_count' or key == 'max_open_file_count' or key == 'max_vm_size' or key == 'max_rss_size':
             res[key] = val
-        elif key == 'max_vm_size' or key == 'max_rss_size':
-            pass  # ignore
         else:
             raise RuntimeError(f"Unknown inf param {key} = {val}")
 
