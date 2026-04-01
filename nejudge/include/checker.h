@@ -106,6 +106,16 @@ void checker_OK(void) {
     exit(0);
 }
 
+void fatal_PE(char const *format, ...) {
+    va_list args;
+
+    va_start(args, format);
+    vfprintf(stderr, format, args);
+    va_end(args);
+    fprintf(stderr, "\n");
+    exit(RUN_PRESENTATION_ERR);
+}
+
 void fatal_WA(char const *format, ...) {
     va_list args;
 

@@ -463,7 +463,8 @@ def run_solution(input_file: Path, correct_file: Path, inf_file: Path, cmd: str,
                 for rlimit, limit in limits.items():
                     old = resource.getrlimit(rlimit)
                     resource.setrlimit(rlimit, (limit, limit))
-                    print(f'Changed rlimit {rlimit} from {old} to {resource.getrlimit(rlimit)}', file=sys.stderr)
+                    if rlimit != resource.RLIMIT_NPROC or limit != 50:
+                        print(f'Changed rlimit {rlimit} from {old} to {resource.getrlimit(rlimit)}', file=sys.stderr)
 
                 if user:
                     import pwd
@@ -684,6 +685,9 @@ def main():
         args.user = None
 
     check_style(args.source_file, not (args.force_check_style or not is_pipeline))
+
+    if not any(Path('tests').glob('*.dat')):
+        raise RuntimeError('No tests found')
 
     for cnt in range(retests_amount):
         print(f"Trying tests #{cnt}")

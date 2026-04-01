@@ -2,5 +2,10 @@
 solution
 run/
 *.o
+.DS_Store
 venv
+
+interactor
+static
+
 .docker-build.stamp

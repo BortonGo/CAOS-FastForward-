@@ -1,0 +1,3 @@
+params =
+environ = PARTIAL_READ=123
+disable_valgrind
