@@ -17,6 +17,8 @@ void *alloc_mem(size_t size) {
     struct Block *prev = NULL;
     struct Block *cur = freelist;
     struct Block *block;
+    void *brk_ptr;
+    uintptr_t brk_addr;
     size_t actual_size;
     size_t total_size;
 
@@ -27,8 +29,10 @@ void *alloc_mem(size_t size) {
             } else {
                 prev->next = cur->next;
             }
+
             return (char *)cur + sizeof(cur->size);
         }
+
         prev = cur;
         cur = cur->next;
     }
@@ -42,12 +46,19 @@ void *alloc_mem(size_t size) {
         actual_size = 8;
     }
 
-    if (actual_size > SIZE_MAX - sizeof(block->size)) {
+    if (actual_size > SIZE_MAX - sizeof(uint64_t)) {
         return NULL;
     }
 
-    total_size = sizeof(block->size) + actual_size;
-    if (total_size > (size_t)INTPTR_MAX) {
+    total_size = sizeof(uint64_t) + actual_size;
+
+    brk_ptr = sbrk(0);
+    if (brk_ptr == (void *)-1) {
+        return NULL;
+    }
+
+    brk_addr = (uintptr_t)brk_ptr;
+    if (brk_addr > (uintptr_t)UINT32_MAX + 1u - (uintptr_t)total_size) {
         return NULL;
     }
 
